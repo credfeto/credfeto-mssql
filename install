@@ -1,0 +1,63 @@
+#!/bin/sh
+set -eu
+
+die() {
+    printf '\n\033[31m✗\033[0m %s\n' "$*"
+    exit 1
+}
+
+success() {
+    printf '\n\033[32m✓\033[0m %s\n' "$*"
+}
+
+# Verify .env exists and SA_PASSWORD is set
+if [ ! -f .env ]; then
+    die ".env file not found. Copy .env.example to .env and fill in the required values."
+fi
+
+# shellcheck source=/dev/null
+. ./.env
+
+if [ -z "${SA_PASSWORD:-}" ]; then
+    die "SA_PASSWORD is not set in .env. Please set it before running install."
+fi
+
+success ".env validated"
+
+# Open SQL Server port for private networks using firewall-cmd
+MSSQL_PORT=1433
+
+allow_ipv4() {
+    subnet="$1"
+    port="$2"
+    protocol="$3"
+    firewall-cmd --permanent \
+        --add-rich-rule="rule family='ipv4' source address='${subnet}' port port='${port}' protocol='${protocol}' accept"
+}
+
+allow_ipv6() {
+    subnet="$1"
+    port="$2"
+    protocol="$3"
+    firewall-cmd --permanent \
+        --add-rich-rule="rule family='ipv6' source address='${subnet}' port port='${port}' protocol='${protocol}' accept"
+}
+
+printf '\n\033[32m→\033[0m Opening port %s/tcp for private networks...\n' "${MSSQL_PORT}"
+
+allow_ipv4 "10.0.0.0/8"      "${MSSQL_PORT}" "tcp"
+allow_ipv4 "172.16.0.0/12"   "${MSSQL_PORT}" "tcp"
+allow_ipv4 "192.168.0.0/16"  "${MSSQL_PORT}" "tcp"
+
+allow_ipv6 "fc00::/7"        "${MSSQL_PORT}" "tcp"
+allow_ipv6 "fe80::/10"       "${MSSQL_PORT}" "tcp"
+
+firewall-cmd --reload
+
+success "Firewall rules applied"
+
+# Pull latest images and start services
+docker compose pull
+docker compose up -d
+
+success "SQL Server installed and running"

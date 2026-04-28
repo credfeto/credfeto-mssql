@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+
+die() {
+    printf '\n\033[31m✗\033[0m %s\n' "$*"
+    exit 1
+}
+
+success() {
+    printf '\n\033[32m✓\033[0m %s\n' "$*"
+}
+
+# Verify .env exists and SA_PASSWORD is set
+if [ ! -f .env ]; then
+    die ".env file not found. Copy .env.example to .env and fill in the required values."
+fi
+
+# shellcheck source=/dev/null
+. ./.env
+
+if [ -z "${SA_PASSWORD:-}" ]; then
+    die "SA_PASSWORD is not set in .env. Please set it before running update."
+fi
+
+success ".env validated"
+
+# Pull latest images and restart services
+docker compose pull
+docker compose up -d
+
+success "SQL Server updated and running"
