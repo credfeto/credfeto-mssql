@@ -372,3 +372,6 @@ dotnet-tools.json
 /build/
 /coverage/
 node_modules
+
+# Local environment — contains secrets, never commit
+.env

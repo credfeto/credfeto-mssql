@@ -1,0 +1,31 @@
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: mssql
+    hostname: sql
+    ports:
+      - "1433:1433/tcp"
+    volumes:
+      - mssql_data:/var/opt/mssql/data
+      - mssql_logs:/var/opt/mssql/logs
+      - mssql_secrets:/var/opt/mssql/secrets
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "${SA_PASSWORD}"
+      MSSQL_PID: "Developer"
+    restart: always
+
+  watchtower:
+    image: nickfedor/watchtower:latest
+    container_name: watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: always
+    environment:
+      WATCHTOWER_NOTIFICATIONS_HOSTNAME: sql-server
+      WATCHTOWER_POLL_INTERVAL: 60
+
+volumes:
+  mssql_data:
+  mssql_logs:
+  mssql_secrets:

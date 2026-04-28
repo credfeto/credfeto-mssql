@@ -1,0 +1,24 @@
+#!/bin/sh
+set -eu
+
+die() {
+    printf '\n\033[31m✗\033[0m %s\n' "$*"
+    exit 1
+}
+
+success() {
+    printf '\n\033[32m✓\033[0m %s\n' "$*"
+}
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+printf '\n\033[32m→\033[0m Stopping and removing containers...\n'
+docker compose down     || die "could not stop containers"
+docker compose rm -f    || die "could not remove containers"
+
+printf '\n\033[32m→\033[0m Pruning unused Docker resources...\n'
+docker system prune -f  || die "could not prune Docker resources"
+
+success "Clean-up complete"
+
+"${SCRIPT_DIR}/update"
