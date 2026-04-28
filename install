@@ -32,7 +32,8 @@ allow_ipv4() {
     port="$2"
     protocol="$3"
     firewall-cmd --permanent \
-        --add-rich-rule="rule family='ipv4' source address='${subnet}' port port='${port}' protocol='${protocol}' accept"
+        --add-rich-rule="rule family='ipv4' source address='${subnet}' port port='${port}' protocol='${protocol}' accept" \
+        || die "could not add IPv4 firewall rule for ${subnet}:${port}/${protocol}"
 }
 
 allow_ipv6() {
@@ -40,7 +41,8 @@ allow_ipv6() {
     port="$2"
     protocol="$3"
     firewall-cmd --permanent \
-        --add-rich-rule="rule family='ipv6' source address='${subnet}' port port='${port}' protocol='${protocol}' accept"
+        --add-rich-rule="rule family='ipv6' source address='${subnet}' port port='${port}' protocol='${protocol}' accept" \
+        || die "could not add IPv6 firewall rule for ${subnet}:${port}/${protocol}"
 }
 
 printf '\n\033[32m→\033[0m Opening port %s/tcp for private networks...\n' "${MSSQL_PORT}"
@@ -52,12 +54,12 @@ allow_ipv4 "192.168.0.0/16"  "${MSSQL_PORT}" "tcp"
 allow_ipv6 "fc00::/7"        "${MSSQL_PORT}" "tcp"
 allow_ipv6 "fe80::/10"       "${MSSQL_PORT}" "tcp"
 
-firewall-cmd --reload
+firewall-cmd --reload || die "could not reload firewall rules"
 
 success "Firewall rules applied"
 
 # Pull latest images and start services
-docker compose pull
-docker compose up -d
+docker compose pull  || die "could not pull latest images"
+docker compose up -d || die "could not start services"
 
 success "SQL Server installed and running"

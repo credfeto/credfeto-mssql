@@ -25,7 +25,7 @@ fi
 success ".env validated"
 
 # Pull latest images and restart services
-docker compose pull
-docker compose up -d
+docker compose pull  || die "could not pull latest images"
+docker compose up -d || die "could not start services"
 
 success "SQL Server updated and running"
