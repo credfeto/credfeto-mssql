@@ -10,6 +10,10 @@ success() {
     printf '\n\033[32m✓\033[0m %s\n' "$*"
 }
 
+info() {
+    printf '\n\033[32m→\033[0m %s\n' "$*"
+}
+
 # Verify .env exists and SA_PASSWORD is set
 if [ ! -f .env ]; then
     die ".env file not found. Copy .env.example to .env and fill in the required values."
@@ -23,6 +27,22 @@ if [ -z "${SA_PASSWORD:-}" ]; then
 fi
 
 success ".env validated"
+
+# Create host directories for SQL Server data volumes
+info "Creating data directories..."
+mkdir -p /data/mssql/data     || die "could not create /data/mssql/data"
+mkdir -p /data/mssql/logs     || die "could not create /data/mssql/logs"
+mkdir -p /data/mssql/security || die "could not create /data/mssql/security"
+
+success "Data directories created"
+
+# Create external Docker volumes bound to host directories
+info "Creating Docker volumes..."
+docker volume create --opt type=none --opt device=/data/mssql/data     --opt o=bind mssql_data     || die "could not create Docker volume mssql_data"
+docker volume create --opt type=none --opt device=/data/mssql/logs     --opt o=bind mssql_logs     || die "could not create Docker volume mssql_logs"
+docker volume create --opt type=none --opt device=/data/mssql/security --opt o=bind mssql_security || die "could not create Docker volume mssql_security"
+
+success "Docker volumes created"
 
 # Open SQL Server port for private networks using firewall-cmd
 MSSQL_PORT=1433
@@ -45,7 +65,7 @@ allow_ipv6() {
         || die "could not add IPv6 firewall rule for ${subnet}:${port}/${protocol}"
 }
 
-printf '\n\033[32m→\033[0m Opening port %s/tcp for private networks...\n' "${MSSQL_PORT}"
+info "Opening port ${MSSQL_PORT}/tcp for private networks..."
 
 allow_ipv4 "10.0.0.0/8"      "${MSSQL_PORT}" "tcp"
 allow_ipv4 "172.16.0.0/12"   "${MSSQL_PORT}" "tcp"
