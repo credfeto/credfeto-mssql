@@ -28,6 +28,14 @@ fi
 
 success ".env validated"
 
+# Ensure correct ownership for the mssql process (UID 10001, GID 0)
+info "Setting directory permissions for SQL Server..."
+chown 10001:0 /data/mssql/data     || die "could not set permissions on /data/mssql/data"
+chown 10001:0 /data/mssql/logs     || die "could not set permissions on /data/mssql/logs"
+chown 10001:0 /data/mssql/security || die "could not set permissions on /data/mssql/security"
+
+success "Directory permissions set"
+
 # Pull latest images and restart services
 docker compose pull  || die "could not pull latest images"
 docker compose up -d || die "could not start services"
