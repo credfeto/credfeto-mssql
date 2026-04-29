@@ -8,7 +8,7 @@ services:
     volumes:
       - mssql_data:/var/opt/mssql/data
       - mssql_logs:/var/opt/mssql/logs
-      - mssql_secrets:/var/opt/mssql/secrets
+      - mssql_security:/var/opt/mssql/secrets
     environment:
       ACCEPT_EULA: "Y"
       SA_PASSWORD: "${SA_PASSWORD}"
@@ -27,5 +27,8 @@ services:
 
 volumes:
   mssql_data:
+    external: true
   mssql_logs:
-  mssql_secrets:
+    external: true
+  mssql_security:
+    external: true
