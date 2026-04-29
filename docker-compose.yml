@@ -11,7 +11,7 @@ services:
       - mssql_security:/var/opt/mssql/secrets
     environment:
       ACCEPT_EULA: "Y"
-      SA_PASSWORD: "${SA_PASSWORD}"
+      MSSQL_SA_PASSWORD: "${SA_PASSWORD}"
       MSSQL_PID: "Developer"
     restart: always
 
