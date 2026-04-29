@@ -36,6 +36,14 @@ mkdir -p /data/mssql/security || die "could not create /data/mssql/security"
 
 success "Data directories created"
 
+# Set ownership for the mssql process (UID 10001, GID 0)
+info "Setting directory permissions for SQL Server..."
+chown 10001:0 /data/mssql/data     || die "could not set permissions on /data/mssql/data"
+chown 10001:0 /data/mssql/logs     || die "could not set permissions on /data/mssql/logs"
+chown 10001:0 /data/mssql/security || die "could not set permissions on /data/mssql/security"
+
+success "Directory permissions set"
+
 # Create external Docker volumes bound to host directories
 info "Creating Docker volumes..."
 docker volume create --opt type=none --opt device=/data/mssql/data     --opt o=bind mssql_data     || die "could not create Docker volume mssql_data"
