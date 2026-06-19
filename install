@@ -33,9 +33,20 @@ info "Creating data directories..."
 mkdir -p /data/mssql/data     || die "could not create /data/mssql/data"
 mkdir -p /data/mssql/logs     || die "could not create /data/mssql/logs"
 mkdir -p /data/mssql/security || die "could not create /data/mssql/security"
+mkdir -p /data/mssql/config   || die "could not create /data/mssql/config"
 mkdir -p /data/restore         || die "could not create /data/restore"
 
 success "Data directories created"
+
+# Write mssql.conf — configure SQL Server to use the dedicated log volume
+info "Writing SQL Server configuration..."
+cat > /data/mssql/config/mssql.conf << 'EOF'
+[filelocation]
+defaultlogdir = /var/opt/mssql/logs
+EOF
+chown 10001:0 /data/mssql/config/mssql.conf || die "could not set ownership on mssql.conf"
+
+success "SQL Server configuration written"
 
 # Set ownership for the mssql process (UID 10001, GID 0)
 info "Setting directory permissions for SQL Server..."
