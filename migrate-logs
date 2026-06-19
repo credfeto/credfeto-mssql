@@ -1,0 +1,125 @@
+#!/bin/bash
+# migrate-logs — move all user database .ldf files to the dedicated log volume
+#               and configure SQL Server to use it for future databases.
+#
+# Usage: sudo ./migrate-logs
+#
+# Run once on the SQL Server VM after the log volume has been set up.
+# Reads SA_PASSWORD from .env in the same directory as this script.
+#
+# What this script does:
+#   1. Queries SQL Server for all user database log files on the data volume
+#   2. Updates each database's file location in the SQL Server catalog
+#   3. Stops the SQL Server container
+#   4. Moves the .ldf files from /data/mssql/data to /data/mssql/logs
+#   5. Writes /data/mssql/config/mssql.conf to set the default log directory
+#   6. Restarts SQL Server via docker compose
+
+set -euo pipefail
+
+CONTAINER="mssql"
+DATA_DIR="/data/mssql/data"
+LOG_DIR="/data/mssql/logs"
+CONFIG_DIR="/data/mssql/config"
+CONTAINER_DATA_DIR="/var/opt/mssql/data"
+CONTAINER_LOG_DIR="/var/opt/mssql/logs"
+
+die()     { printf '\n\033[31m✗\033[0m %s\n' "$*" >&2; exit 1; }
+info()    { printf '\n\033[32m→\033[0m %s\n' "$*"; }
+success() { printf '\n\033[32m✓\033[0m %s\n' "$*"; }
+
+# ── Load settings ─────────────────────────────────────────────────────────────
+
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+ENV_FILE="$SCRIPT_DIR/.env"
+
+[ -f "$ENV_FILE" ] || die ".env file not found at $ENV_FILE — copy .env.example to .env and set SA_PASSWORD"
+# shellcheck source=/dev/null
+. "$ENV_FILE"
+
+[ -n "${SA_PASSWORD:-}" ] || die "SA_PASSWORD is not set in $ENV_FILE"
+
+SQLCMD_OPTS="-S 127.0.0.1 -U sa -P $SA_PASSWORD -b -h -1 -W"
+
+# ── Step 1: find user database log files on the data volume ───────────────────
+
+info "Querying user database log files on the data volume ..."
+# Output format: DatabaseName|LogicalName|PhysicalPath
+# shellcheck disable=SC2086
+LOG_FILES=$(sqlcmd $SQLCMD_OPTS \
+    -Q "SET NOCOUNT ON;
+        SELECT db.name + '|' + mf.name + '|' + mf.physical_name
+        FROM sys.master_files AS mf
+        JOIN sys.databases    AS db ON mf.database_id = db.database_id
+        WHERE mf.type        = 1
+          AND db.database_id > 4
+          AND mf.physical_name LIKE '$CONTAINER_DATA_DIR/%';" \
+    2>/dev/null | grep '|' || true)
+
+if [ -z "$LOG_FILES" ]; then
+    success "No user database log files found on the data volume — nothing to migrate."
+    exit 0
+fi
+
+printf '%s\n' "$LOG_FILES"
+
+# ── Step 2: update file locations in SQL Server catalog ───────────────────────
+
+info "Updating file locations in the SQL Server catalog ..."
+while IFS='|' read -r DB_NAME LOGICAL_NAME OLD_PATH; do
+    [ -n "$DB_NAME" ] || continue
+    NEW_PATH="$CONTAINER_LOG_DIR/$(basename "$OLD_PATH")"
+    info "  [$DB_NAME] $LOGICAL_NAME: $OLD_PATH → $NEW_PATH"
+    # shellcheck disable=SC2086
+    sqlcmd $SQLCMD_OPTS \
+        -Q "ALTER DATABASE [$DB_NAME] MODIFY FILE (NAME = N'$LOGICAL_NAME', FILENAME = N'$NEW_PATH');" \
+        2>/dev/null \
+        || die "Failed to update file location for $DB_NAME"
+done <<< "$LOG_FILES"
+success "Catalog updated"
+
+# ── Step 3: stop SQL Server ───────────────────────────────────────────────────
+
+info "Stopping SQL Server container ..."
+docker stop "$CONTAINER" || die "Could not stop container $CONTAINER"
+success "Container stopped"
+
+# ── Step 4: move .ldf files ───────────────────────────────────────────────────
+
+info "Moving log files to $LOG_DIR ..."
+while IFS='|' read -r DB_NAME _LOGICAL _OLD_PATH; do
+    [ -n "$DB_NAME" ] || continue
+    FILE_NAME=$(basename "$_OLD_PATH")
+    SRC="$DATA_DIR/$FILE_NAME"
+    DST="$LOG_DIR/$FILE_NAME"
+    if [ -f "$SRC" ]; then
+        info "  Moving $FILE_NAME ..."
+        mv "$SRC" "$DST"
+        chown 10001:0 "$DST"
+    else
+        info "  WARNING: $SRC not found — SQL Server may have already moved it or it does not exist"
+    fi
+done <<< "$LOG_FILES"
+success "Files moved"
+
+# ── Step 5: write mssql.conf ──────────────────────────────────────────────────
+
+info "Writing SQL Server configuration ..."
+mkdir -p "$CONFIG_DIR"
+cat > "$CONFIG_DIR/mssql.conf" << 'EOF'
+[filelocation]
+defaultlogdir = /var/opt/mssql/logs
+EOF
+chown 10001:0 "$CONFIG_DIR/mssql.conf"
+success "Configuration written to $CONFIG_DIR/mssql.conf"
+
+# ── Step 6: restart SQL Server via compose to pick up new bind mount ──────────
+
+info "Starting SQL Server (docker compose up to apply new mssql.conf mount) ..."
+docker compose -f "$SCRIPT_DIR/docker-compose.yml" up -d \
+    || die "Could not start container via docker compose"
+success "Container started"
+
+success "Migration complete — all user database log files are now on $LOG_DIR"
+info "New databases will also default to $CONTAINER_LOG_DIR for log files."
+info "Verify all databases came online: sqlcmd -Q \"SELECT name, state_desc FROM sys.databases\""

@@ -13,6 +13,9 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ### Security
 ### Added
 - mssql_restore volume mounted at /var/opt/mssql/backup, backed by /data/restore on the host, for backup and restore operations
+- `migrate-logs` script to move all existing user database `.ldf` files from the data volume to the dedicated log volume and update the SQL Server catalog
+- `mssql.conf` bind-mounted from `/data/mssql/config/mssql.conf` to configure `filelocation.defaultlogdir` so new databases default to the log volume
+- `install` now creates `/data/mssql/config/mssql.conf` with the log directory configuration
 
 ### Fixed
 - Use `MSSQL_SA_PASSWORD` environment variable instead of `SA_PASSWORD` for SQL Server 2022 compatibility
