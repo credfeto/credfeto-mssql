@@ -46,7 +46,7 @@ else
     SQLCMD_BIN=/opt/mssql-tools/bin/sqlcmd
 fi
 SQLCMD="docker exec $CONTAINER $SQLCMD_BIN"
-SQLCMD_OPTS="-S localhost -U sa -P $SA_PASSWORD -b -h -1 -W"
+SQLCMD_OPTS="-S localhost -U sa -P $SA_PASSWORD -b -h -1 -W -C"
 
 # ── Step 1: find user database log files on the data volume ───────────────────
 
