@@ -113,10 +113,11 @@ EOF
 chown 10001:0 "$CONFIG_DIR/mssql.conf"
 success "Configuration written to $CONFIG_DIR/mssql.conf"
 
-# ── Step 6: restart SQL Server ────────────────────────────────────────────────
+# ── Step 6: restart SQL Server via compose to pick up new bind mount ──────────
 
-info "Starting SQL Server ..."
-docker start "$CONTAINER" || die "Could not start container $CONTAINER"
+info "Starting SQL Server (docker compose up to apply new mssql.conf mount) ..."
+docker compose -f "$SCRIPT_DIR/docker-compose.yml" up -d \
+    || die "Could not start container via docker compose"
 success "Container started"
 
 success "Migration complete — all user database log files are now on $LOG_DIR"
