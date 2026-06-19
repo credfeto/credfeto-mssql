@@ -11,6 +11,7 @@ services:
       - mssql_logs:/var/opt/mssql/logs
       - mssql_security:/var/opt/mssql/secrets
       - mssql_restore:/var/opt/mssql/backup
+      - /data/mssql/config/mssql.conf:/var/opt/mssql/mssql.conf
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "${SA_PASSWORD}"
