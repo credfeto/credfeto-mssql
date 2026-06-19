@@ -5,10 +5,7 @@
 # Usage: sudo ./migrate-logs
 #
 # Run once on the SQL Server VM after the log volume has been set up.
-# Reads connection settings from /root/.database or environment variables:
-#   SERVER   — SQL Server host (default: 127.0.0.1)
-#   USER     — SQL login (default: sa)
-#   PASSWORD — SQL password (required)
+# Reads SA_PASSWORD from .env in the same directory as this script.
 #
 # What this script does:
 #   1. Queries SQL Server for all user database log files on the data volume
@@ -33,18 +30,16 @@ success() { printf '\n\033[32m✓\033[0m %s\n' "$*"; }
 
 # ── Load settings ─────────────────────────────────────────────────────────────
 
-if [ -f /root/.database ]; then
-    # shellcheck disable=SC1091
-    . /root/.database
-fi
+SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
+ENV_FILE="$SCRIPT_DIR/.env"
 
-SERVER="${SERVER:-127.0.0.1}"
-DB_USER="${USER:-sa}"
-PASSWORD="${PASSWORD:-}"
+[ -f "$ENV_FILE" ] || die ".env file not found at $ENV_FILE — copy .env.example to .env and set SA_PASSWORD"
+# shellcheck source=/dev/null
+. "$ENV_FILE"
 
-[ -n "$PASSWORD" ] || die "PASSWORD not set — add it to /root/.database or export it before running"
+[ -n "${SA_PASSWORD:-}" ] || die "SA_PASSWORD is not set in $ENV_FILE"
 
-SQLCMD_OPTS="-S $SERVER -U $DB_USER -P $PASSWORD -b -h -1 -W"
+SQLCMD_OPTS="-S 127.0.0.1 -U sa -P $SA_PASSWORD -b -h -1 -W"
 
 # ── Step 1: find user database log files on the data volume ───────────────────
 
