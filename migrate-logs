@@ -27,9 +27,9 @@ CONFIG_DIR="/data/mssql/config"
 CONTAINER_DATA_DIR="/var/opt/mssql/data"
 CONTAINER_LOG_DIR="/var/opt/mssql/logs"
 
-die()     { echo; echo "ERROR: $*" >&2; exit 1; }
-info()    { echo "→ $*"; }
-success() { echo "✓ $*"; }
+die()     { printf '\n\033[31m✗\033[0m %s\n' "$*" >&2; exit 1; }
+info()    { printf '\n\033[32m→\033[0m %s\n' "$*"; }
+success() { printf '\n\033[32m✓\033[0m %s\n' "$*"; }
 
 # ── Load settings ─────────────────────────────────────────────────────────────
 
@@ -66,8 +66,7 @@ if [ -z "$LOG_FILES" ]; then
     exit 0
 fi
 
-echo "$LOG_FILES"
-echo
+printf '%s\n' "$LOG_FILES"
 
 # ── Step 2: update file locations in SQL Server catalog ───────────────────────
 
@@ -125,11 +124,6 @@ info "Starting SQL Server ..."
 docker start "$CONTAINER" || die "Could not start container $CONTAINER"
 success "Container started"
 
-echo
 success "Migration complete — all user database log files are now on $LOG_DIR"
-echo "  New databases will also default to $CONTAINER_LOG_DIR for log files."
-echo
-echo "NOTE: The other databases on the data volume still have their .ldf files"
-echo "      here. They were moved above. If SQL Server reports missing files on"
-echo "      startup, verify each database comes online with: sqlcmd -Q \"SELECT"
-echo "      name, state_desc FROM sys.databases\""
+info "New databases will also default to $CONTAINER_LOG_DIR for log files."
+info "Verify all databases came online: sqlcmd -Q \"SELECT name, state_desc FROM sys.databases\""
