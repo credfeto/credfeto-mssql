@@ -54,7 +54,7 @@ LOG_FILES=$(sqlcmd $SQLCMD_OPTS \
         WHERE mf.type        = 1
           AND db.database_id > 4
           AND mf.physical_name LIKE '$CONTAINER_DATA_DIR/%';" \
-    2>/dev/null | grep '|' || true)
+    | grep '|' || true)
 
 if [ -z "$LOG_FILES" ]; then
     success "No user database log files found on the data volume — nothing to migrate."
@@ -73,7 +73,6 @@ while IFS='|' read -r DB_NAME LOGICAL_NAME OLD_PATH; do
     # shellcheck disable=SC2086
     sqlcmd $SQLCMD_OPTS \
         -Q "ALTER DATABASE [$DB_NAME] MODIFY FILE (NAME = N'$LOGICAL_NAME', FILENAME = N'$NEW_PATH');" \
-        2>/dev/null \
         || die "Failed to update file location for $DB_NAME"
 done <<< "$LOG_FILES"
 success "Catalog updated"
