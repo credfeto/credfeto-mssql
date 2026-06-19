@@ -21,6 +21,8 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 - Use `MSSQL_SA_PASSWORD` environment variable instead of `SA_PASSWORD` for SQL Server 2022 compatibility
 - Set volume directory ownership to `mssql` process (UID 10001, GID 0) in `install` and `update` scripts so SQL Server can access its data directories
 - Set `/data/restore` to sticky 1777 so any user can scp/rsync backup files into it while the mssql process retains read access
+- `migrate-logs`: invoke `sqlcmd` via `docker exec` — the tool is inside the SQL Server container, not installed on the VM host
+- `migrate-logs`: pass `-C` (TrustServerCertificate) to sqlcmd so ODBC Driver 18 accepts the container's self-signed certificate
 
 ### Changed
 ### Deprecated
