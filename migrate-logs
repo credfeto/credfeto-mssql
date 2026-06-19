@@ -39,14 +39,21 @@ ENV_FILE="$SCRIPT_DIR/.env"
 
 [ -n "${SA_PASSWORD:-}" ] || die "SA_PASSWORD is not set in $ENV_FILE"
 
-SQLCMD_OPTS="-S 127.0.0.1 -U sa -P $SA_PASSWORD -b -h -1 -W"
+# sqlcmd lives inside the container; prefer mssql-tools18 (SQL Server 2022), fall back to mssql-tools
+if docker exec "$CONTAINER" test -f /opt/mssql-tools18/bin/sqlcmd 2>/dev/null; then
+    SQLCMD_BIN=/opt/mssql-tools18/bin/sqlcmd
+else
+    SQLCMD_BIN=/opt/mssql-tools/bin/sqlcmd
+fi
+SQLCMD="docker exec $CONTAINER $SQLCMD_BIN"
+SQLCMD_OPTS="-S localhost -U sa -P $SA_PASSWORD -b -h -1 -W -C"
 
 # ── Step 1: find user database log files on the data volume ───────────────────
 
 info "Querying user database log files on the data volume ..."
 # Output format: DatabaseName|LogicalName|PhysicalPath
 # shellcheck disable=SC2086
-LOG_FILES=$(sqlcmd $SQLCMD_OPTS \
+LOG_FILES=$($SQLCMD $SQLCMD_OPTS \
     -Q "SET NOCOUNT ON;
         SELECT db.name + '|' + mf.name + '|' + mf.physical_name
         FROM sys.master_files AS mf
@@ -54,7 +61,7 @@ LOG_FILES=$(sqlcmd $SQLCMD_OPTS \
         WHERE mf.type        = 1
           AND db.database_id > 4
           AND mf.physical_name LIKE '$CONTAINER_DATA_DIR/%';" \
-    2>/dev/null | grep '|' || true)
+    | grep '|' || true)
 
 if [ -z "$LOG_FILES" ]; then
     success "No user database log files found on the data volume — nothing to migrate."
@@ -71,9 +78,8 @@ while IFS='|' read -r DB_NAME LOGICAL_NAME OLD_PATH; do
     NEW_PATH="$CONTAINER_LOG_DIR/$(basename "$OLD_PATH")"
     info "  [$DB_NAME] $LOGICAL_NAME: $OLD_PATH → $NEW_PATH"
     # shellcheck disable=SC2086
-    sqlcmd $SQLCMD_OPTS \
+    $SQLCMD $SQLCMD_OPTS \
         -Q "ALTER DATABASE [$DB_NAME] MODIFY FILE (NAME = N'$LOGICAL_NAME', FILENAME = N'$NEW_PATH');" \
-        2>/dev/null \
         || die "Failed to update file location for $DB_NAME"
 done <<< "$LOG_FILES"
 success "Catalog updated"
@@ -122,4 +128,4 @@ success "Container started"
 
 success "Migration complete — all user database log files are now on $LOG_DIR"
 info "New databases will also default to $CONTAINER_LOG_DIR for log files."
-info "Verify all databases came online: sqlcmd -Q \"SELECT name, state_desc FROM sys.databases\""
+info "Verify all databases came online: docker exec $CONTAINER $SQLCMD_BIN -S localhost -U sa -P '<password>' -Q \"SELECT name, state_desc FROM sys.databases\""
