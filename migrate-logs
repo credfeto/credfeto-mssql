@@ -53,7 +53,6 @@ SQLCMD_OPTS="-S localhost -U sa -P $SA_PASSWORD -b -h -1 -W"
 info "Querying user database log files on the data volume ..."
 # Output format: DatabaseName|LogicalName|PhysicalPath
 # shellcheck disable=SC2086
-# shellcheck disable=SC2086
 LOG_FILES=$($SQLCMD $SQLCMD_OPTS \
     -Q "SET NOCOUNT ON;
         SELECT db.name + '|' + mf.name + '|' + mf.physical_name
