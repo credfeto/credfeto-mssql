@@ -25,10 +25,13 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 - `migrate-logs`: pass `-C` (TrustServerCertificate) to sqlcmd so ODBC Driver 18 accepts the container's self-signed certificate
 
 ### Changed
+- watchtower now removes old images after updating and checks for new images on a cron schedule (WATCHTOWER_SCHEDULE, default daily at 06:30, overridable in .env) instead of every 60 seconds (WATCHTOWER_POLL_INTERVAL)
 ### Deprecated
 ### Removed
 ### Deployment Changes
+
 <!--
 Releases that have at least been deployed to staging, BUT NOT necessarily released to live.  Changes should be moved from [Unreleased] into here as they are merged into the appropriate release branch
 -->
+
 ## [0.0.0] - Project created
