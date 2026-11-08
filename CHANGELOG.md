@@ -25,10 +25,13 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 - `migrate-logs`: pass `-C` (TrustServerCertificate) to sqlcmd so ODBC Driver 18 accepts the container's self-signed certificate
 
 ### Changed
+- docker-compose: watchtower now cleans up old images and uses WATCHTOWER_SCHEDULE (default daily 06:30, overridable in .env) instead of WATCHTOWER_POLL_INTERVAL
 ### Deprecated
 ### Removed
 ### Deployment Changes
+
 <!--
 Releases that have at least been deployed to staging, BUT NOT necessarily released to live.  Changes should be moved from [Unreleased] into here as they are merged into the appropriate release branch
 -->
+
 ## [0.0.0] - Project created
