@@ -26,7 +26,8 @@ services:
     restart: always
     environment:
       WATCHTOWER_NOTIFICATIONS_HOSTNAME: sql-server
-      WATCHTOWER_POLL_INTERVAL: 60
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_SCHEDULE: "${WATCHTOWER_SCHEDULE:-0 30 6 * * *}"
 
 volumes:
   mssql_data:
