@@ -107,4 +107,9 @@ success "Firewall rules applied"
 docker compose pull  || die "could not pull latest images"
 docker compose up -d || die "could not start services"
 
+# Egress lockdown (nftables table inet sql_egress); observation mode unless
+# MSSQL_FIREWALL_ENFORCE=true in .env. See README.md, "Host egress firewall".
+info "Configuring the host egress firewall..."
+"$(dirname "$(readlink -f "$0")")/firewall/configure" || die "could not configure the host egress firewall"
+
 success "SQL Server installed and running"

@@ -1,0 +1,99 @@
+#!/bin/sh
+
+# Locks the SQL Server host's egress down. Called as root by ../install and
+# ../update, after docker compose has started the containers.
+#
+# Egress: one nftables table, inet sql_egress, built and loaded by
+# firewall/egress (see there): host_out for what the host itself may connect
+# to, docker_fwd for what the containers may connect to. The whole table,
+# address sets included, is replaced in one nft transaction, so a refresh
+# never reloads firewalld and a failed load keeps the previous rules.
+#
+# MSSQL_FIREWALL_ENFORCE=true in .env is the single enforcement knob: the
+# table drops new outbound connections it does not allow. Otherwise (the
+# default, observation mode) unmatched traffic still flows and is only logged,
+# with the prefixes "sql-egress-unmatched: " and
+# "sql-egress-docker-unmatched: ". The same rules serve both modes: run in
+# observation mode, check the log for anything legitimate, then enforce.
+#
+# Ingress is not handled here: SQL Server's clients (the Technitium DNS
+# servers' query logs and other apps) reach 1433 through install's firewalld
+# rules, and SSH is the host's base configuration. Replies to those inbound
+# connections are established traffic, which the egress table always accepts.
+
+set -eu
+
+die() {
+    printf '\n\033[31m✗\033[0m %s\n' "$*" >&2
+    exit 1
+}
+
+info() {
+    printf '\n\033[32m→\033[0m %s\n' "$*"
+}
+
+[ "$(id -u)" -eq 0 ] || die "must run as root"
+
+command -v nft > /dev/null 2>&1 || die "nft is required"
+command -v python3 > /dev/null 2>&1 || die "python3 is required"
+
+# One run at a time: sql-firewall-sync.timer can fire while ./update (or a
+# manual run) is still configuring, and concurrent firewall changes would trip
+# over each other.
+exec 9> /run/lock/credfeto-mssql-firewall.lock
+flock 9
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ENV_FILE="${SCRIPT_DIR}/../.env"
+# Keep in sync with STATE_DIR and RANGES_DIR in firewall/egress and with
+# firewall/sync.
+STATE_DIR="/var/lib/credfeto-mssql"
+SHARE_DIR="/usr/local/share/credfeto-mssql"
+
+# Reads one setting from .env without sourcing it (and without printing
+# anything else from it).
+env_value() {
+    [ -f "${ENV_FILE}" ] || return 0
+    grep -E "^[[:space:]]*$1[[:space:]]*=" "${ENV_FILE}" | tail -n 1 | cut -d= -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/^"\(.*\)"$/\1/'
+}
+
+ENFORCE="false"
+if [ "$(env_value MSSQL_FIREWALL_ENFORCE)" = "true" ]; then
+    ENFORCE="true"
+fi
+
+info "Configuring the egress firewall (enforce ${ENFORCE})..."
+
+# --- The egress table and its refresh timer ---
+install -m 755 "${SCRIPT_DIR}/egress" /usr/local/bin/sql-egress
+install -d -m 755 "${SHARE_DIR}"
+install -m 644 "${SCRIPT_DIR}/github-egress-ranges" "${SHARE_DIR}/github-egress-ranges"
+install -m 644 "${SCRIPT_DIR}/cloudflare-egress-ranges" "${SHARE_DIR}/cloudflare-egress-ranges"
+install -m 644 "${SCRIPT_DIR}/sql-egress-refresh.service" /etc/systemd/system/sql-egress-refresh.service
+install -m 644 "${SCRIPT_DIR}/sql-egress-refresh.timer" /etc/systemd/system/sql-egress-refresh.timer
+# The setting firewall/egress reads, written before the timers restart so
+# that no run picks up a stale one.
+install -d -m 755 "${STATE_DIR}"
+printf '%s\n' "${ENFORCE}" > "${STATE_DIR}/egress-enforce"
+
+systemctl daemon-reload
+systemctl enable sql-egress-refresh.timer > /dev/null 2>&1
+systemctl restart sql-egress-refresh.timer
+# Load the table now rather than at the timer's first run.
+/usr/local/bin/sql-egress || die "Failed to load the egress table"
+
+# --- Keep the firewall in step with the repo: firewall/sync pulls and re-runs
+# this script when the firewall config changes, e.g. the daily egress-ranges
+# commit. A symlink, so the script finds the checkout it lives in.
+ln -sfn "${SCRIPT_DIR}/sync" /usr/local/sbin/sql-firewall-sync
+install -m 644 "${SCRIPT_DIR}/sql-firewall-sync.service" /etc/systemd/system/sql-firewall-sync.service
+install -m 644 "${SCRIPT_DIR}/sql-firewall-sync.timer" /etc/systemd/system/sql-firewall-sync.timer
+systemctl daemon-reload
+systemctl enable sql-firewall-sync.timer > /dev/null 2>&1
+systemctl restart sql-firewall-sync.timer
+
+# Record the commit whose firewall config is now live; firewall/sync compares
+# against it.
+git -C "${SCRIPT_DIR}" rev-parse HEAD > "${STATE_DIR}/firewall-applied-head"
+
+info "Egress firewall configured (enforce ${ENFORCE})."

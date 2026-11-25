@@ -11,6 +11,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 
 ## [Unreleased]
 ### Security
+- Host egress firewall in observation mode (`firewall/configure`, run by `install` and `update`): one nftables table, `inet sql_egress`, loaded atomically by `firewall/egress`, lists what the host (`host_out`) and the containers (`docker_fwd`) may connect to: the fleet DNS servers, NTP to the router, the reverse proxies, monitoring, GitHub, MCR, Docker Hub, Cloudflare and the Arch services. Resolved destinations are refreshed every 10 minutes by `sql-egress-refresh.timer` and kept for 7 days, `sql-firewall-sync.timer` re-applies the rules when `firewall/` changes, and the daily `Repo: Update egress ranges` workflow refreshes the GitHub and Cloudflare ranges. Unmatched connections are only logged (`sql-egress-unmatched:`, `sql-egress-docker-unmatched:`) until `MSSQL_FIREWALL_ENFORCE=true` is set in `.env`. Inbound connections to SQL Server on 1433 are not affected
 ### Added
 - mssql_restore volume mounted at /var/opt/mssql/backup, backed by /data/restore on the host, for backup and restore operations
 - `migrate-logs` script to move all existing user database `.ldf` files from the data volume to the dedicated log volume and update the SQL Server catalog
@@ -29,6 +30,7 @@ Please ADD ALL Changes to the UNRELEASED SECTION and not a specific release
 ### Deprecated
 ### Removed
 ### Deployment Changes
+- Optional `.env` setting `MSSQL_FIREWALL_ENFORCE`: unset (the default) leaves the new egress firewall in observation mode; `true` drops unmatched outbound connections. Review `journalctl -k | grep sql-egress` before enforcing
 
 <!--
 Releases that have at least been deployed to staging, BUT NOT necessarily released to live.  Changes should be moved from [Unreleased] into here as they are merged into the appropriate release branch
